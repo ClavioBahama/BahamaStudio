@@ -1,0 +1,14 @@
+# Saidas de compilacao e pacotes gerados
+bin/
+dist/
+obj/
+
+# Logs e pastas de autoteste
+*.log
+selftest/
+*-selftest/
+shots/
+
+# Ficheiros do Windows
+Thumbs.db
+desktop.ini
