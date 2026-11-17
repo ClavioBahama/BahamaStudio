@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows.Threading;
@@ -24,6 +26,16 @@ namespace BahamaStudio
         private const uint WineventSkipOwnProcess = 0x0002;
 
         private const int ObjidWindow = 0;
+
+        // O watchdog existe para vencer o repaint do Explorador no 24H2. A cada 5 s
+        // (em vez de 1,2 s) é suficiente e reduz o trabalho em segundo plano.
+        private const int WatchdogIntervalMs = 5000;
+
+        // EVENT_OBJECT_LOCATIONCHANGE dispara em cascata. Ignorar a mesma janela
+        // durante este intervalo evita reaplicações redundantes sem perder o efeito.
+        private const int ReapplyDebounceMs = 300;
+
+        private const int ClassCacheLimit = 256;
 
         [StructLayout(LayoutKind.Sequential)]
         private struct Margins
@@ -81,13 +93,22 @@ namespace BahamaStudio
 
         private static bool _active;
         private static IntPtr _hookForeground = IntPtr.Zero;
-        private static IntPtr _hookMinimizeEnd = IntPtr.Zero;
-        private static IntPtr _hookShow = IntPtr.Zero;
-        private static IntPtr _hookLocation = IntPtr.Zero;
+
+        // Os hooks de janela são instalados por PID do explorer.exe: o próprio
+        // Windows filtra os eventos antes de chegarem ao nosso callback.
+        private static readonly List<IntPtr> _processHooks = new List<IntPtr>();
+        private static readonly List<int> _hookPids = new List<int>();
+
+        // Cache de classes e de última aplicação para não repetir P/Invoke e
+        // SetWindowCompositionAttribute quando nada mudou.
+        private static readonly Dictionary<IntPtr, bool> _classCache = new Dictionary<IntPtr, bool>();
+        private static readonly Dictionary<IntPtr, uint> _lastApply = new Dictionary<IntPtr, uint>();
+
         private static DispatcherTimer _reapplyTimer;
         private static DispatcherTimer _watchdogTimer;
         private static int _applyCount;
         private static int _lastLoggedCount = -1;
+        private static bool _forceApply;
         private static int _level = 100;
         private static int _gradientColor;
         private static int _gradientLevel = -1;
@@ -169,6 +190,8 @@ namespace BahamaStudio
                 _active = false;
                 UninstallHooks();
                 StopTimers();
+                _classCache.Clear();
+                _lastApply.Clear();
                 RestoreAll();
                 Log.Write("[transparency] transparência total desativada");
             }
@@ -194,8 +217,16 @@ namespace BahamaStudio
             if (_watchdogTimer == null)
             {
                 _watchdogTimer = new DispatcherTimer();
-                _watchdogTimer.Interval = TimeSpan.FromMilliseconds(1200);
-                _watchdogTimer.Tick += delegate { ApplyAll(); };
+                _watchdogTimer.Interval = TimeSpan.FromMilliseconds(WatchdogIntervalMs);
+                _watchdogTimer.Tick += delegate
+                {
+                    // O Explorador pode ter reiniciado: atualiza os hooks por PID
+                    // e limpa os caches antes de reaplicar a todas as janelas.
+                    EnsureExplorerHooks();
+                    _classCache.Clear();
+                    _lastApply.Clear();
+                    ApplyAll(true);
+                };
             }
 
             _reapplyTimer.Stop();
@@ -213,14 +244,70 @@ namespace BahamaStudio
         {
             uint flags = WineventOutOfContext | WineventSkipOwnProcess;
 
+            // O foreground é global: a janela que ganha foco pode ser de qualquer
+            // aplicação, e este evento é pouco frequente.
             _hookForeground = SetWinEventHook(EventSystemForeground, EventSystemForeground,
                 IntPtr.Zero, HookProc, 0, 0, flags);
-            _hookMinimizeEnd = SetWinEventHook(EventSystemMinimizeEnd, EventSystemMinimizeEnd,
-                IntPtr.Zero, HookProc, 0, 0, flags);
-            _hookShow = SetWinEventHook(EventObjectShow, EventObjectShow,
-                IntPtr.Zero, HookProc, 0, 0, flags);
-            _hookLocation = SetWinEventHook(EventObjectLocationChange, EventObjectLocationChange,
-                IntPtr.Zero, HookProc, 0, 0, flags);
+
+            EnsureExplorerHooks();
+        }
+
+        private static void EnsureExplorerHooks()
+        {
+            if (!_active) return;
+
+            uint flags = WineventOutOfContext | WineventSkipOwnProcess;
+            List<int> pids = new List<int>();
+            try
+            {
+                Process[] processes = Native.GetExplorerProcesses();
+                for (int i = 0; i < processes.Length; i++)
+                {
+                    try
+                    {
+                        int pid = processes[i].Id;
+                        if (pid > 0 && !pids.Contains(pid)) pids.Add(pid);
+                    }
+                    catch { }
+                    try { processes[i].Dispose(); } catch { }
+                }
+            }
+            catch { }
+
+            if (SamePids(pids, _hookPids)) return;
+
+            for (int i = 0; i < _processHooks.Count; i++)
+            {
+                try { UnhookWinEvent(_processHooks[i]); } catch { }
+            }
+            _processHooks.Clear();
+            _hookPids.Clear();
+
+            // Os restantes eventos interessam apenas quando vêm do explorer.exe.
+            // Passar o PID ao SetWinEventHook filtra no sistema, antes do callback.
+            for (int i = 0; i < pids.Count; i++)
+            {
+                IntPtr hook = SetWinEventHook(EventSystemMinimizeEnd, EventSystemMinimizeEnd,
+                    IntPtr.Zero, HookProc, (uint)pids[i], 0, flags);
+                if (hook != IntPtr.Zero) _processHooks.Add(hook);
+
+                hook = SetWinEventHook(EventObjectShow, EventObjectShow,
+                    IntPtr.Zero, HookProc, (uint)pids[i], 0, flags);
+                if (hook != IntPtr.Zero) _processHooks.Add(hook);
+
+                hook = SetWinEventHook(EventObjectLocationChange, EventObjectLocationChange,
+                    IntPtr.Zero, HookProc, (uint)pids[i], 0, flags);
+                if (hook != IntPtr.Zero) _processHooks.Add(hook);
+
+                _hookPids.Add(pids[i]);
+            }
+        }
+
+        private static bool SamePids(List<int> a, List<int> b)
+        {
+            if (a.Count != b.Count) return false;
+            for (int i = 0; i < a.Count; i++) if (a[i] != b[i]) return false;
+            return true;
         }
 
         private static void UninstallHooks()
@@ -230,21 +317,12 @@ namespace BahamaStudio
                 UnhookWinEvent(_hookForeground);
                 _hookForeground = IntPtr.Zero;
             }
-            if (_hookMinimizeEnd != IntPtr.Zero)
+            for (int i = 0; i < _processHooks.Count; i++)
             {
-                UnhookWinEvent(_hookMinimizeEnd);
-                _hookMinimizeEnd = IntPtr.Zero;
+                try { UnhookWinEvent(_processHooks[i]); } catch { }
             }
-            if (_hookShow != IntPtr.Zero)
-            {
-                UnhookWinEvent(_hookShow);
-                _hookShow = IntPtr.Zero;
-            }
-            if (_hookLocation != IntPtr.Zero)
-            {
-                UnhookWinEvent(_hookLocation);
-                _hookLocation = IntPtr.Zero;
-            }
+            _processHooks.Clear();
+            _hookPids.Clear();
         }
 
         private static void OnWinEvent(IntPtr hook, uint eventType, IntPtr hwnd,
@@ -253,15 +331,16 @@ namespace BahamaStudio
             if (!_active) return;
 
             // EVENT_OBJECT_LOCATIONCHANGE também chega para controles internos.
-            if (eventType == EventObjectLocationChange && idObject != ObjidWindow) return;
+            if (eventType == EventObjectLocationChange &&
+                (idObject != ObjidWindow || idChild != 0)) return;
 
-            bool isExplorer = hwnd != IntPtr.Zero && IsExplorerWindow(hwnd);
+            bool isExplorer = hwnd != IntPtr.Zero && IsExplorerWindowCached(hwnd);
 
             if (isExplorer && (eventType == EventSystemForeground ||
                                eventType == EventSystemMinimizeEnd ||
                                eventType == EventObjectShow))
             {
-                ApplyToWindow(hwnd);
+                ApplyToWindow(hwnd, false);
             }
 
             // Ao perder o foco, o novo foreground pertence a outra janela:
@@ -273,6 +352,7 @@ namespace BahamaStudio
         private static void QueueReapply()
         {
             if (!_active || _reapplyTimer == null) return;
+            // Um tick já agendado chega: não reiniciar o timer a cada evento.
             if (!_reapplyTimer.IsEnabled) _reapplyTimer.Start();
         }
 
@@ -280,11 +360,22 @@ namespace BahamaStudio
         {
             if (!_active) return false;
             if (!IsWindowVisible(hwnd)) return true;
-            if (!IsExplorerWindow(hwnd)) return true;
+            if (!IsExplorerWindowCached(hwnd)) return true;
 
-            ApplyToWindow(hwnd);
+            ApplyToWindow(hwnd, _forceApply);
             _applyCount++;
             return true;
+        }
+
+        private static bool IsExplorerWindowCached(IntPtr hwnd)
+        {
+            bool result;
+            if (_classCache.TryGetValue(hwnd, out result)) return result;
+
+            result = IsExplorerWindow(hwnd);
+            if (_classCache.Count >= ClassCacheLimit) _classCache.Clear();
+            _classCache[hwnd] = result;
+            return result;
         }
 
         private static bool IsExplorerWindow(IntPtr hwnd)
@@ -303,8 +394,14 @@ namespace BahamaStudio
 
         private static void ApplyAll()
         {
+            ApplyAll(false);
+        }
+
+        private static void ApplyAll(bool force)
+        {
             if (!_active) return;
 
+            _forceApply = force;
             _applyCount = 0;
             try
             {
@@ -322,14 +419,26 @@ namespace BahamaStudio
             }
         }
 
-        private static void ApplyToWindow(IntPtr hwnd)
+        private static void ApplyToWindow(IntPtr hwnd, bool force)
         {
             if (!_active) return;
             if (!IsWindowVisible(hwnd)) return;
-            if (!IsExplorerWindow(hwnd)) return;
+            if (!IsExplorerWindowCached(hwnd)) return;
+            if (!force && !ShouldApply(hwnd)) return;
 
             ApplyAccent(hwnd, AccentEnableTransparentGradient, 2, CurrentGradient());
             ExtendFrame(hwnd, -1);
+        }
+
+        private static bool ShouldApply(IntPtr hwnd)
+        {
+            uint now = unchecked((uint)Environment.TickCount);
+            uint last;
+            if (_lastApply.TryGetValue(hwnd, out last) &&
+                unchecked(now - last) < ReapplyDebounceMs) return false;
+
+            _lastApply[hwnd] = now;
+            return true;
         }
 
         private static int CurrentGradient()
@@ -366,7 +475,7 @@ namespace BahamaStudio
                 EnumWindows(delegate(IntPtr hwnd, IntPtr lParam)
                 {
                     if (!IsWindowVisible(hwnd)) return true;
-                    if (!IsExplorerWindow(hwnd)) return true;
+                    if (!IsExplorerWindowCached(hwnd)) return true;
 
                     ApplyAccent(hwnd, AccentDisabled, 0, 0);
                     ExtendFrame(hwnd, 0);
