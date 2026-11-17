@@ -23,13 +23,16 @@ echo Compilando Bahama Studio...
   /resource:"%SRC%\Theme.xaml",Theme.xaml ^
   /reference:"%FW%\System.dll" ^
   /reference:"%FW%\System.Core.dll" ^
+  /reference:"%FW%\System.Drawing.dll" ^
+  /reference:"%FW%\System.Windows.Forms.dll" ^
   /reference:"%FW%\System.Xaml.dll" ^
   /reference:"%WPF%\PresentationFramework.dll" ^
   /reference:"%WPF%\PresentationCore.dll" ^
   /reference:"%WPF%\WindowsBase.dll" ^
   "%SRC%\Native.cs" "%SRC%\ExplorerTransparency.cs" "%SRC%\MachineProfile.cs" "%SRC%\Theme.cs" "%SRC%\Engine.cs" "%SRC%\Ui.cs" "%SRC%\Widgets.cs" ^
   "%SRC%\PageBase.cs" "%SRC%\DashboardPage.cs" "%SRC%\AppearancePage.cs" "%SRC%\InstallPage.cs" ^
-  "%SRC%\DiagnosticsPage.cs" "%SRC%\EmergencyPage.cs" "%SRC%\MainWindow.cs" "%SRC%\Program.cs"
+  "%SRC%\DiagnosticsPage.cs" "%SRC%\EmergencyPage.cs" "%SRC%\MainWindow.cs" "%SRC%\Program.cs" ^
+  "%SRC%\TrayIcon.cs"
 
 if errorlevel 1 goto fail
 

@@ -789,10 +789,10 @@ namespace BahamaStudio
                 window.Show();
                 if (startup)
                 {
-                    // Arrancado pelo atalho da pasta Inicialização: reaplica os efeitos
-                    // a partir do config.ini e fica minimizado na barra de tarefas.
-                    window.WindowState = WindowState.Minimized;
-                    Log.Write("[startup] arranque automático: efeitos serão reaplicados do config.ini");
+                    // Mostrar e esconder no mesmo tick cria o HWND (necessário para o
+                    // Loaded reaplicar o efeito) sem deixar a janela aparecer.
+                    window.Hide();
+                    Log.Write("[startup] arranque automático: app na bandeja, efeitos reaplicados do config.ini");
                 }
                 if (selfTest) SelfTest.Run(window, shots);
             };

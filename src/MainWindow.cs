@@ -29,6 +29,7 @@ namespace BahamaStudio
         private readonly Border _statusExplorerDot;
         private readonly TextBlock _maxGlyph;
         private readonly DispatcherTimer _timer;
+        private TrayIcon _tray;
         private bool _suppressNav;
         private string _current = "";
         private bool _ready;
@@ -36,6 +37,7 @@ namespace BahamaStudio
         public MainWindow()
         {
             Settings = AppSettings.Load();
+            _tray = new TrayIcon(this);
 
             Title = "Bahama Studio";
             Width = 1180;
@@ -157,6 +159,23 @@ namespace BahamaStudio
                     return;
                 }
                 Settings.Save();
+
+                // Fechar a janela deixa a app residente na bandeja e mantém o
+                // reaplicador ativo. "Sair" (menu da bandeja) encerra de vez.
+                if (!_forceClose)
+                {
+                    e.Cancel = true;
+                    Hide();
+                    if (_tray != null) _tray.Refresh();
+                    return;
+                }
+
+                ExplorerTransparency.Stop();
+                if (_tray != null)
+                {
+                    _tray.Dispose();
+                    _tray = null;
+                }
             };
 
             _timer = new DispatcherTimer();
@@ -680,6 +699,19 @@ namespace BahamaStudio
             {
                 Native.OpenFolder(Paths.DataDir);
             });
+        }
+
+        public void ShowWindow()
+        {
+            Show();
+            WindowState = WindowState.Normal;
+            Activate();
+        }
+
+        public void ExitApplication()
+        {
+            ExplorerTransparency.Stop();
+            ForceClose();
         }
 
         public void ForceClose()

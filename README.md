@@ -52,8 +52,8 @@ oficial, a licença, este README e os scripts `install.cmd` / `uninstall.cmd`.
    - cria o atalho **Bahama Studio** no Menu Iniciar;
    - registra a desinstalação apenas no `HKCU` (sem tocar no `HKLM`).
 3. Abra o Bahama Studio pelo Menu Iniciar e use **Diagnóstico → Detetar e adaptar ao PC**.
-   O instalador também cria um atalho na pasta Inicialização: a app abre minimizada e reaplica
-   os efeitos lidos do `config.ini` a cada arranque do Windows.
+   O instalador também cria um atalho na pasta Inicialização: nesse modo a app arranca **apenas
+   na bandeja**, sem mostrar a janela, e reaplica os efeitos lidos do `config.ini`.
 4. Vá a **Instalar** e clique em **Instalar engine 2.1.0**. Aí sim o Windows pedirá UAC.
 
 Para remover, execute `uninstall.cmd` (está na pasta instalada e no ZIP). Ele apaga os arquivos
@@ -102,7 +102,11 @@ O relatório de **Copiar relatório** também passa a incluir esses dados do PC.
    uma vez e uma pasta é aberta para validar o efeito.
 5. Vá para **Aparência** para escolher o efeito e ajustar a transparência.
 
-Não há serviço residente, telemetria ou acesso à internet. O app só executa quando aberto.
+Não há serviço do Windows, telemetria nem acesso à internet. O Bahama Studio fica residente
+**na bandeja do sistema** (ícone ao lado do relógio): ao fechar a janela com o `X`, ela apenas se
+esconde e o reaplicador de transparência continua ativo. O menu do ícone tem **Abrir**,
+**Transparência total** (liga/desliga para a sessão atual) e **Sair** (encerra de vez e remove o
+efeito). O arranque automático usa esse mesmo modo bandeja.
 
 ### Atalhos
 
@@ -211,7 +215,7 @@ a=0
 > configuração Acrílico/RGBA(0,0,0,0) mesmo com o Bahama Studio fechado. No Windows 11 24H2 o
 > próprio Explorador volta a pintar um fundo opaco por cima do vidro durante o uso normal. Por isso
 > mantenha também o interruptor **Fundo do Explorador / transparência total** ligado: ele reaplica
-> o efeito enquanto a app está aberta (minimizada no arranque, graças ao atalho na pasta Inicialização).
+> o efeito enquanto a app está aberta (na bandeja no arranque, graças ao atalho na pasta Inicialização).
 > Assim você tem base persistente + vidro visível o tempo todo.
 
 > Em computadores/Drivers em que o Windows não consegue desfocar o fundo (por exemplo, GPUs
@@ -244,8 +248,9 @@ Pontos importantes:
 - o efeito é **reaplicado** quando a janela é ativada, restaurada, minimizada ou perde o foco,
   e também em janelas abertas depois (`SetWinEventHook` + enumeração de janelas);
 - um verificador de baixa frequência reaplica o efeito se o Explorador repintar o fundo sozinho;
-- ao desligar o interruptor ou fechar o Bahama Studio, o efeito é removido e as janelas voltam
-  ao padrão do Windows;
+- ao desligar o interruptor ou escolher **Sair** no ícone da bandeja, o efeito é removido e as
+  janelas voltam ao padrão do Windows. Fechar apenas a janela com o `X` não remove o efeito: a app
+  fica na bandeja e continua a reaplicá-lo;
 - não reinicia o Explorador e não exige administrador.
 
 > **Limite do Windows 11 24H2:** o conteúdo XAML do Explorador pode repintar um fundo sólido por
