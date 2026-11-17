@@ -415,7 +415,6 @@ namespace BahamaStudio
         public bool ConfigExists;
         public bool ConfigWritable;
         public string InstalledVersion = "";
-        public string ConfigVersion = "";
         public bool BundledExists;
         public string BundledVersion = "";
         public string BundledHash = "";
@@ -538,7 +537,6 @@ namespace BahamaStudio
             }
             status.ConfigExists = File.Exists(status.ConfigPath);
             status.ConfigWritable = CanWrite(status.ConfigPath);
-            if (status.ConfigExists) status.ConfigVersion = Native.GetFileVersion(Paths.BundledDll);
 
             status.BundledExists = File.Exists(Paths.BundledDll);
             if (status.BundledExists)
@@ -588,7 +586,7 @@ namespace BahamaStudio
 
                 string folder = Path.GetDirectoryName(path);
                 if (string.IsNullOrEmpty(folder) || !Directory.Exists(folder)) return false;
-                string probe = Path.Combine(folder, ".mica-write-" + Guid.NewGuid().ToString("N") + ".tmp");
+                string probe = Path.Combine(folder, ".bahama-write-" + Guid.NewGuid().ToString("N") + ".tmp");
                 using (FileStream fs = new FileStream(probe, FileMode.CreateNew, FileAccess.Write, FileShare.None)) { }
                 File.Delete(probe);
                 return true;

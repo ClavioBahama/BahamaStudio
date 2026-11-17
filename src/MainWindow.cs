@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -144,10 +145,18 @@ namespace BahamaStudio
                 for (int i = 0; i < _keys.Length; i++) if (_keys[i] == start) valid = true;
                 Navigate(valid ? start : "dashboard");
 
-                // Retoma o efeito nativo quando o config.ini guardado o deixou ligado.
-                EngineConfig activeConfig = EngineManager.LoadActiveConfig();
-                if (activeConfig.TotalTransparency)
-                    ExplorerTransparency.SetEnabled(true, activeConfig.TotalTransparencyLevel);
+                // LoadActiveConfig calcula SHA-256, lista processos e consulta eventos.
+                // Executar em segundo plano para não bloquear a interface na abertura.
+                ThreadPool.QueueUserWorkItem(delegate(object state)
+                {
+                    EngineConfig activeConfig = EngineManager.LoadActiveConfig();
+                    if (!activeConfig.TotalTransparency) return;
+
+                    Dispatcher.BeginInvoke(new Action(delegate
+                    {
+                        ExplorerTransparency.SetEnabled(true, activeConfig.TotalTransparencyLevel);
+                    }));
+                });
             };
 
             Closing += delegate(object sender, System.ComponentModel.CancelEventArgs e)
