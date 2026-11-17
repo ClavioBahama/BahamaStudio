@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Security.Principal;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -648,6 +649,18 @@ namespace BahamaStudio
             return "--" + key + "=\"" + value.Replace("\"", "") + "\"";
         }
 
+        // O SID é passado explicitamente e validado no Ops contra o SID do próprio
+        // processo elevado. Assim uma chamada não pode conceder acesso a outra conta.
+        private static string CurrentSid()
+        {
+            try
+            {
+                WindowsIdentity identity = WindowsIdentity.GetCurrent();
+                return identity == null || identity.User == null ? "" : identity.User.Value;
+            }
+            catch { return ""; }
+        }
+
         public static InstallReport Install(EngineConfig config, bool grantQuickApply, bool validateFolder, IProgress<string> progress)
         {
             InstallReport report = new InstallReport();
@@ -714,7 +727,8 @@ namespace BahamaStudio
                               Q("config", tempConfig) + " " +
                               Q("license", Paths.BundledLicense) + " " +
                               Q("readme", Paths.BundledReadme) + " " +
-                              "--grant=" + (grantQuickApply ? "1" : "0");
+                              "--grant=" + (grantQuickApply ? "1" : "0") + " " +
+                               Q("sid", CurrentSid());
 
                 OpResult op = RunElevated(args);
                 if (!op.Success)
@@ -940,7 +954,8 @@ namespace BahamaStudio
                 config.Save(temp);
                 try
                 {
-                    OpResult op = RunElevated("--op=writeconfig " + Q("target", targetPath) + " " + Q("source", temp));
+                    OpResult op = RunElevated("--op=writeconfig " + Q("target", targetPath) + " " +
+                                          Q("source", temp) + " " + Q("sid", CurrentSid()));
                     if (!op.Success)
                     {
                         error = op.Cancelled ? "Cancelado na janela do Windows." : op.Message;
@@ -969,7 +984,8 @@ namespace BahamaStudio
                     File.Copy(sourcePath, targetPath, true);
                     return true;
                 }
-                OpResult op = RunElevated("--op=writeconfig " + Q("target", targetPath) + " " + Q("source", sourcePath));
+                OpResult op = RunElevated("--op=writeconfig " + Q("target", targetPath) + " " +
+                                          Q("source", sourcePath) + " " + Q("sid", CurrentSid()));
                 return op.Success;
             }
             catch (Exception ex)
@@ -985,7 +1001,8 @@ namespace BahamaStudio
             try
             {
                 EngineStatus status = Detect();
-                OpResult op = RunElevated("--op=grant " + Q("target", status.ConfigPath));
+                OpResult op = RunElevated("--op=grant " + Q("target", status.ConfigPath) + " " +
+                                          Q("sid", CurrentSid()));
                 if (!op.Success)
                 {
                     message = op.Cancelled ? "Cancelado." : op.Message;
@@ -1007,7 +1024,8 @@ namespace BahamaStudio
             try
             {
                 EngineStatus status = Detect();
-                OpResult op = RunElevated("--op=revoke " + Q("target", status.ConfigPath));
+                OpResult op = RunElevated("--op=revoke " + Q("target", status.ConfigPath) + " " +
+                                          Q("sid", CurrentSid()));
                 if (!op.Success)
                 {
                     message = op.Cancelled ? "Cancelado." : op.Message;

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Security.Principal;
 using System.Text;
 using System.Threading;
 using System.Windows;
@@ -43,6 +44,19 @@ namespace BahamaStudio
 
     internal static class Ops
     {
+        // SHA-256 da engine oficial 2.1.0 empacotada em engine\ExplorerBlurMica.dll.
+        // Nenhuma outra DLL pode ser copiada ou registada pelas operações elevadas.
+        private const string BundledDllSha256 =
+            "36B44444FC8AE1C4FDC3A80CDC6B0C0A04CC843984189C17DADF964BCAA9F052";
+
+        private const string EngineFileName = "ExplorerBlurMica.dll";
+        private const string ConfigFileName = "config.ini";
+
+        // Códigos de saída distintos para cada recusa de segurança.
+        private const int ExitTargetNotAllowed = 10;
+        private const int ExitSourceNotAllowed = 11;
+        private const int ExitSidNotAllowed = 12;
+
         public static bool IsOperation(string[] args)
         {
             for (int i = 0; i < args.Length; i++)
@@ -75,6 +89,126 @@ namespace BahamaStudio
             }
         }
 
+        private static string NormalizePath(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return "";
+            try { return Path.GetFullPath(path.Trim()); }
+            catch { return ""; }
+        }
+
+        private static bool SamePath(string a, string b)
+        {
+            return !string.IsNullOrEmpty(a) && !string.IsNullOrEmpty(b) &&
+                   string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string RegisteredEnginePath()
+        {
+            try
+            {
+                Native.EngineRegistration registration = Native.FindEngineRegistration();
+                if (registration == null || string.IsNullOrEmpty(registration.DllPath)) return "";
+                return NormalizePath(registration.DllPath);
+            }
+            catch { return ""; }
+        }
+
+        // Só a DLL já registada ou o destino oficial de Program Files são aceites.
+        private static bool IsAllowedTarget(string target)
+        {
+            string path = NormalizePath(target);
+            if (path.Length == 0) return false;
+            if (!string.Equals(Path.GetFileName(path), EngineFileName, StringComparison.OrdinalIgnoreCase))
+            {
+                Log.Write("[ops] alvo recusado (nome de ficheiro): " + target);
+                return false;
+            }
+            if (SamePath(path, NormalizePath(Paths.DefaultTarget))) return true;
+
+            string registered = RegisteredEnginePath();
+            if (SamePath(path, registered)) return true;
+
+            Log.Write("[ops] alvo recusado (caminho): " + target);
+            return false;
+        }
+
+        // writeconfig/grant/revoke atuam apenas no config.ini ao lado dessa DLL.
+        private static bool IsAllowedConfig(string target)
+        {
+            string path = NormalizePath(target);
+            if (path.Length == 0) return false;
+            if (!string.Equals(Path.GetFileName(path), ConfigFileName, StringComparison.OrdinalIgnoreCase))
+            {
+                Log.Write("[ops] config recusado (nome de ficheiro): " + target);
+                return false;
+            }
+
+            string dir = NormalizePath(Path.GetDirectoryName(path));
+            string defaultDir = NormalizePath(Path.GetDirectoryName(Paths.DefaultTarget));
+            if (SamePath(dir, defaultDir)) return true;
+
+            string registered = RegisteredEnginePath();
+            if (registered.Length > 0 && SamePath(dir, NormalizePath(Path.GetDirectoryName(registered))))
+                return true;
+
+            Log.Write("[ops] config recusado (pasta): " + target);
+            return false;
+        }
+
+        // A origem tem de ser exatamente a DLL empacotada ao lado do executável.
+        private static bool IsAllowedSource(string source)
+        {
+            string path = NormalizePath(source);
+            if (!SamePath(path, NormalizePath(Paths.BundledDll)))
+            {
+                Log.Write("[ops] origem recusada (caminho): " + source);
+                return false;
+            }
+            string hash = Native.ComputeSha256(path);
+            if (!string.Equals(hash, BundledDllSha256, StringComparison.OrdinalIgnoreCase))
+            {
+                Log.Write("[ops] origem recusada (SHA-256): " + hash);
+                return false;
+            }
+            return true;
+        }
+
+        // Depois do UAC o SID continua a ser o do utilizador: o token é que muda.
+        // Aceitar um SID arbitrário permitiria conceder acesso a outra conta.
+        // O argumento --sid é opcional e só é aceite se for igual ao SID atual.
+        private static bool TryResolveSid(string[] args, out string sid)
+        {
+            sid = "";
+            try
+            {
+                WindowsIdentity identity = WindowsIdentity.GetCurrent();
+                if (identity == null || identity.User == null) return false;
+
+                string current = identity.User.Value;
+                string supplied = Args.Get(args, "sid", "");
+                if (string.IsNullOrEmpty(supplied))
+                {
+                    sid = current;
+                    return true;
+                }
+
+                SecurityIdentifier parsed = new SecurityIdentifier(supplied);
+                if (!string.Equals(parsed.Value, current, StringComparison.OrdinalIgnoreCase))
+                {
+                    Log.Write("[ops] SID recebido não corresponde ao utilizador que iniciou a operação.");
+                    return false;
+                }
+
+                sid = current;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log.Write("[ops] SID inválido: " + ex.Message);
+                return false;
+            }
+        }
+
         private static int Install(string[] args)
         {
             string target = Args.Get(args, "target", Paths.DefaultTarget);
@@ -83,6 +217,12 @@ namespace BahamaStudio
             string license = Args.Get(args, "license", "");
             string readme = Args.Get(args, "readme", "");
             bool grant = Args.Get(args, "grant", "0") == "1";
+
+            if (!IsAllowedTarget(target)) return ExitTargetNotAllowed;
+            if (!IsAllowedSource(source)) return ExitSourceNotAllowed;
+
+            string sid;
+            if (!TryResolveSid(args, out sid)) return ExitSidNotAllowed;
 
             if (!File.Exists(source))
             {
@@ -134,7 +274,7 @@ namespace BahamaStudio
                 }
             }
 
-            if (grant && File.Exists(targetConfig)) GrantFile(targetConfig);
+            if (grant && File.Exists(targetConfig)) GrantFile(targetConfig, sid);
 
             Log.Write("[ops] instalado em " + target);
             return 0;
@@ -144,6 +284,8 @@ namespace BahamaStudio
         {
             string target = Args.Get(args, "target", Paths.DefaultTarget);
             bool remove = Args.Get(args, "remove", "0") == "1";
+
+            if (!IsAllowedTarget(target)) return ExitTargetNotAllowed;
 
             if (File.Exists(target)) CallRegSvr(target, true);
             UnregisterDirect();
@@ -170,13 +312,16 @@ namespace BahamaStudio
         {
             string target = Args.Get(args, "target", "");
             string source = Args.Get(args, "source", "");
-            if (string.IsNullOrEmpty(target) || !File.Exists(source))
+            if (!IsAllowedConfig(target)) return ExitTargetNotAllowed;
+            if (string.IsNullOrEmpty(source) || !File.Exists(source))
             {
                 Log.Write("[ops] writeconfig inválido.");
                 return 3;
             }
+            string sid;
+            if (!TryResolveSid(args, out sid)) return ExitSidNotAllowed;
             if (!CopyWithRetry(source, target)) return 4;
-            GrantFile(target);
+            GrantFile(target, sid);
             Log.Write("[ops] config gravada em " + target);
             return 0;
         }
@@ -184,17 +329,22 @@ namespace BahamaStudio
         private static int Grant(string[] args)
         {
             string target = Args.Get(args, "target", "");
-            if (string.IsNullOrEmpty(target) || !File.Exists(target)) return 3;
-            return GrantFile(target) ? 0 : 5;
+            if (!IsAllowedConfig(target)) return ExitTargetNotAllowed;
+            if (!File.Exists(target)) return 3;
+            string sid;
+            if (!TryResolveSid(args, out sid)) return ExitSidNotAllowed;
+            return GrantFile(target, sid) ? 0 : 5;
         }
 
         private static int Revoke(string[] args)
         {
             string target = Args.Get(args, "target", "");
-            if (string.IsNullOrEmpty(target) || !File.Exists(target)) return 3;
+            if (!IsAllowedConfig(target)) return ExitTargetNotAllowed;
+            if (!File.Exists(target)) return 3;
+            string sid;
+            if (!TryResolveSid(args, out sid)) return ExitSidNotAllowed;
             try
             {
-                string sid = System.Security.Principal.WindowsIdentity.GetCurrent().User.Value;
                 RunTool("icacls.exe", "\"" + target + "\" /remove *" + sid, 15000);
                 Log.Write("[ops] permissão removida de " + target);
                 return 0;
@@ -206,11 +356,10 @@ namespace BahamaStudio
             }
         }
 
-        private static bool GrantFile(string path)
+        private static bool GrantFile(string path, string sid)
         {
             try
             {
-                string sid = System.Security.Principal.WindowsIdentity.GetCurrent().User.Value;
                 RunTool("icacls.exe", "\"" + path + "\" /grant *" + sid + ":(R,W)", 15000);
                 Log.Write("[ops] permissão de gravação liberada para " + path);
                 return true;
