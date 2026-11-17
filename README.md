@@ -329,9 +329,13 @@ build.cmd
 ```
 
 O script compila `src\*.cs` em `bin\BahamaStudio.exe` (x64, WPF, .NET Framework 4.8), embute
-`Theme.xaml` e o ícone, e copia `engine\` para `bin\`. Para gerar o pacote de distribuição,
-atualize `dist\BahamaStudio-1.0-x64.zip` com `BahamaStudio.exe`, `BahamaStudio.exe.config`,
-`engine\`, `README.md`, `install.cmd` e `uninstall.cmd`.
+`Theme.xaml` e o ícone, e copia `engine\` para `bin\`. A versão tem uma única fonte de verdade:
+o ficheiro `version.txt` na raiz. O `build.cmd` gera `obj\AssemblyInfo.g.cs` com
+`AssemblyVersion`/`FileVersion` a partir dele, e o `install.cmd` lê o mesmo ficheiro para o
+registro de desinstalação. Ao alterar a versão, mude apenas `version.txt`.
+
+Para gerar o pacote de distribuição com barras normais (`/`) e o ficheiro `SHA256SUMS.txt`,
+execute `package.cmd`.
 
 ### Modo de autoteste
 

@@ -2,6 +2,7 @@
 setlocal
 set "APP=Bahama Studio"
 set "VERSION=1.0"
+if exist "%~dp0version.txt" for /f "usebackq delims=" %%v in ("%~dp0version.txt") do set "VERSION=%%v"
 set "SRC=%~dp0"
 set "DEST=%LOCALAPPDATA%\Programs\Bahama Studio"
 set "STARTMENU=%APPDATA%\Microsoft\Windows\Start Menu\Programs"
