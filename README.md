@@ -8,7 +8,16 @@ Blur, Acrílico e Mica nas janelas do Explorador de Arquivos do Windows.
 O Bahama Studio não reimplementa o hook do shell. Ele empacota a engine oficial, instala com
 backup, testa o resultado e desfaz sozinho se o Explorador falhar.
 
-![Fluxo](assets/BahamaStudio-256.png)
+### Capturas do aplicativo
+
+Imagens reais geradas com `bin\BahamaStudio.exe --selftest --screenshots=...`:
+
+| Visão geral | Aparência |
+| --- | --- |
+| ![Visão geral](docs/screenshots/1-dashboard.png) | ![Aparência](docs/screenshots/2-aparencia.png) |
+
+[Instalar](docs/screenshots/3-instalar.png) · [Diagnóstico](docs/screenshots/4-diagnostico.png) ·
+[Emergência](docs/screenshots/5-emergencia.png) · [Diálogo](docs/screenshots/6-dialogo.png)
 
 ---
 
@@ -391,3 +400,22 @@ modificações. Se você substituir a engine, mantenha a licença e o ReadMe jun
   **Blur puro**. O app avisa isso no Diagnóstico, na Visão geral, na Instalação e na própria
   página Aparência ao selecionar Mica; a adaptação automática já escolhe um desses efeitos.
 - O efeito é aplicado pelo Explorador; reiniciar o `explorer.exe` é necessário para ver mudanças.
+
+---
+
+## English (brief)
+
+**Bahama Studio 1.0** is a WPF manager for the **ExplorerBlurMica 2.1.0** engine (LGPLv3) on
+Windows 10/11 x64. It installs the bundled DLL, writes `config.ini`, validates Explorer after a
+restart and rolls back automatically if validation fails. No NuGet, no network, no telemetry.
+
+- **Install:** run `install.cmd` (no admin needed); installing the engine triggers UAC.
+- **Tray icon:** Open / Total transparency on-off / Exit. Closing the window only hides it —
+  the app stays resident and keeps reapplying the effect.
+- **Build:** `build.cmd` (csc.exe, .NET Framework 4.8). **Package:** `package.cmd` creates
+  `dist\BahamaStudio-1.0-x64.zip` with `/` entry names and `dist\SHA256SUMS.txt`.
+- **Version:** `version.txt` is the single source of truth; `AssemblyVersion` and the installer
+  registry entries are generated from it.
+- **Licenses:** Bahama Studio code is MIT (`LICENSE`); the engine remains LGPLv3
+  ([upstream tag 2.1.0](https://github.com/Maplespe/ExplorerBlurMica/tree/2.1.0)).
+- **Self-test:** `bin\BahamaStudio.exe --selftest --screenshots=...` closes by itself.
