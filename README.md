@@ -370,11 +370,13 @@ com elevação apenas quando necessário; reiniciar o Explorador não exige admi
 - **Bahama Studio** — interface e orquestração de instalação, criado por **Clávio Bahama**.
   Não altera o código da engine.
 - **ExplorerBlurMica** — engine oficial de [Maplespe](https://github.com/Maplespe/ExplorerBlurMica),
+  **versão 2.1.0** ([tag no upstream](https://github.com/Maplespe/ExplorerBlurMica/tree/2.1.0)),
   licenciada em **LGPLv3**. A licença está em `engine\LICENSE-LGPLv3.txt` e é copiada para a
   pasta de instalação.
 
-A DLL em `engine\` é distribuída sem modificações. Se você substituir a engine, mantenha a
-licença e o ReadMe junto dela.
+O código e a documentação do **Bahama Studio** são **MIT** (ficheiro `LICENSE` na raiz). Essa
+licença **não** cobre a engine: a DLL em `engine\` continua sob LGPLv3 e é distribuída sem
+modificações. Se você substituir a engine, mantenha a licença e o ReadMe junto dela.
 
 ---
 
