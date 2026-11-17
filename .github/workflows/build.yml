@@ -1,0 +1,26 @@
+name: Build
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Obter o codigo
+        uses: actions/checkout@v4
+
+      - name: Compilar e empacotar
+        shell: cmd
+        run: package.cmd
+
+      - name: Publicar artefactos
+        uses: actions/upload-artifact@v4
+        with:
+          name: BahamaStudio-package
+          path: |
+            dist/*.zip
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
