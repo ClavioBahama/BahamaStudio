@@ -8,6 +8,21 @@ Blur, Acrílico e Mica nas janelas do Explorador de Arquivos do Windows.
 O Bahama Studio não reimplementa o hook do shell. Ele empacota a engine oficial, instala com
 backup, testa o resultado e desfaz sozinho se o Explorador falhar.
 
+## Download
+
+| Arquivo | Descrição | Link |
+| --- | --- | --- |
+| `BahamaStudio-1.0-x64.zip` | Aplicativo completo (executável, engine 2.1.0, README e scripts) | [Descarregar](https://github.com/ClavioBahama/BahamaStudio/releases/download/v1.0-win10fix/BahamaStudio-1.0-x64.zip) |
+| `SHA256SUMS.txt` | Soma SHA-256 para conferir o pacote | [Descarregar](https://github.com/ClavioBahama/BahamaStudio/releases/download/v1.0-win10fix/SHA256SUMS.txt) |
+
+Página da release: [v1.0-win10fix](https://github.com/ClavioBahama/BahamaStudio/releases/tag/v1.0-win10fix) — inclui a correção do Windows 10.
+
+Para instalar: extraia **todos** os arquivos do ZIP para uma pasta e execute `install.cmd` com
+duplo clique. Veja [Instalar noutra máquina](#instalar-noutra-máquina) para os detalhes.
+
+> O repositório contém apenas o código-fonte. As pastas `bin/` e `dist/` são geradas por
+> `build.cmd` e `package.cmd`; o pacote pronto está na release acima.
+
 ### Capturas do aplicativo
 
 Imagens reais geradas com `bin\BahamaStudio.exe --selftest --screenshots=...`:
