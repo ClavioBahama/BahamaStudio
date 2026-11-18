@@ -37,6 +37,13 @@ namespace BahamaStudio
 
         private const int ClassCacheLimit = 256;
 
+        // ACCENT_ENABLE_TRANSPARENTGRADIENT com margens -1 só compõe corretamente
+        // no Windows 11. No Windows 10 o DWM pinta o cliente de branco/preto e o
+        // vidro só aparece depois de minimizar/restaurar. Nesses sistemas a base
+        // Acrílica RGBA(0,0,0,0) aplicada pela engine dentro do Explorer é estável.
+        private static readonly bool Supported = Native.GetWindowsInfo().IsWindows11;
+        private static bool _unsupportedLogged;
+
         [StructLayout(LayoutKind.Sequential)]
         private struct Margins
         {
@@ -119,9 +126,14 @@ namespace BahamaStudio
         private static readonly WinEventDelegate HookProc = OnWinEvent;
         private static readonly EnumWindowsProc EnumProc = OnEnumWindow;
 
+        public static bool IsSupported
+        {
+            get { return Supported; }
+        }
+
         public static bool IsActive
         {
-            get { return _active; }
+            get { return _active && Supported; }
         }
 
         public static int Level
@@ -161,6 +173,16 @@ namespace BahamaStudio
 
         public static void Start()
         {
+            if (!Supported)
+            {
+                if (!_unsupportedLogged)
+                {
+                    _unsupportedLogged = true;
+                    Log.Write("[transparency] transparência total disponível apenas no Windows 11; " +
+                              "use o vidro totalmente transparente no Windows 10");
+                }
+                return;
+            }
             if (_active) return;
 
             try
