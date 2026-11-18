@@ -252,6 +252,13 @@ totalTransparency=true
 totalTransparencyLevel=100
 ```
 
+> **Windows 10:** a transparência total nativa **não é suportada**. O DWM do Windows 10 pinta o
+> cliente de branco/preto com `ACCENT_ENABLE_TRANSPARENTGRADIENT` e margens `-1`, e o vidro só
+> reaparece ao minimizar/restaurar. O interruptor e o item **Transparência total** da bandeja
+> ficam desativados nesse sistema, mesmo que o `config.ini` traga `totalTransparency=true`.
+> A alternativa estável é o cartão **Vidro totalmente transparente**: a engine aplica Acrílico
+> RGBA(0,0,0,0) de dentro do Explorer, sem depender do reaplicador nativo.
+
 Pontos importantes:
 
 - o efeito é **reaplicado** quando a janela é ativada, restaurada, minimizada ou perde o foco,
@@ -399,6 +406,8 @@ modificações. Se você substituir a engine, mantenha a licença e o ReadMe jun
 - Em Windows 10 não há Mica nativo, mas o resto funciona: use **Acrílico** (build 1809+) ou
   **Blur puro**. O app avisa isso no Diagnóstico, na Visão geral, na Instalação e na própria
   página Aparência ao selecionar Mica; a adaptação automática já escolhe um desses efeitos.
+- Em Windows 10 a **transparência total nativa** está desativada (o Explorador fica branco/preto).
+  Use **Vidro totalmente transparente**, que aplica Acrílico RGBA(0,0,0,0) pela engine.
 - O efeito é aplicado pelo Explorador; reiniciar o `explorer.exe` é necessário para ver mudanças.
 
 ---
@@ -410,8 +419,9 @@ Windows 10/11 x64. It installs the bundled DLL, writes `config.ini`, validates E
 restart and rolls back automatically if validation fails. No NuGet, no network, no telemetry.
 
 - **Install:** run `install.cmd` (no admin needed); installing the engine triggers UAC.
-- **Tray icon:** Open / Total transparency on-off / Exit. Closing the window only hides it —
-  the app stays resident and keeps reapplying the effect.
+- **Tray icon:** Open / Total transparency on-off (Windows 11 only) / Exit. Closing the window
+  only hides it — the app stays resident and keeps reapplying the effect. On Windows 10 use
+  **Fully transparent glass** (Acrylic RGBA 0,0,0,0) instead.
 - **Build:** `build.cmd` (csc.exe, .NET Framework 4.8). **Package:** `package.cmd` creates
   `dist\BahamaStudio-1.0-x64.zip` with `/` entry names and `dist\SHA256SUMS.txt`.
 - **Version:** `version.txt` is the single source of truth; `AssemblyVersion` and the installer
