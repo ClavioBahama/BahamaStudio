@@ -34,6 +34,10 @@ namespace BahamaStudio
             _toggle = new ToolStripMenuItem("Transparência total");
             _toggle.CheckOnClick = true;
             _toggle.Checked = ExplorerTransparency.IsActive;
+            _toggle.Enabled = ExplorerTransparency.IsSupported;
+            _toggle.ToolTipText = ExplorerTransparency.IsSupported
+                ? "Ativa ou desativa o reaplicador nativo do fundo do Explorador."
+                : "Disponível apenas no Windows 11. No Windows 10 use Aparência → Vidro totalmente transparente → Aplicar no Explorer.";
             _toggle.Click += delegate(object sender, EventArgs e) { ToggleTransparency(); };
             menu.Items.Add(_toggle);
 
@@ -58,6 +62,11 @@ namespace BahamaStudio
 
         private void ToggleTransparency()
         {
+            if (!ExplorerTransparency.IsSupported)
+            {
+                _toggle.Checked = false;
+                return;
+            }
             bool enable = _toggle.Checked;
             ExplorerTransparency.SetEnabled(enable);
             _icon.Text = enable

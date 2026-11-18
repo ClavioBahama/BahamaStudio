@@ -150,6 +150,7 @@ namespace BahamaStudio
                 ThreadPool.QueueUserWorkItem(delegate(object state)
                 {
                     EngineConfig activeConfig = EngineManager.LoadActiveConfig();
+                    if (!ExplorerTransparency.IsSupported) return;
                     if (!activeConfig.TotalTransparency) return;
 
                     Dispatcher.BeginInvoke(new Action(delegate

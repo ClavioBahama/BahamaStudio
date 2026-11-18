@@ -17,6 +17,7 @@ namespace BahamaStudio
         private bool _configWritable = true;
         private bool _installed;
         private bool _supportsMica;
+        private bool _nativeTransparencySupported;
 
         private readonly PreviewExplorer _preview = new PreviewExplorer();
         private readonly List<EffectCard> _cards = new List<EffectCard>();
@@ -57,6 +58,7 @@ namespace BahamaStudio
         {
             _config = EngineManager.LoadActiveConfig();
             _supportsMica = Native.GetWindowsInfo().SupportsMica;
+            _nativeTransparencySupported = ExplorerTransparency.IsSupported;
             NormalizeConfig();
             _previewDark = Native.IsSystemDarkMode();
             _editingDark = _previewDark;
@@ -94,13 +96,21 @@ namespace BahamaStudio
             _lineToggle = new ToggleRow("Mostrar linha divisória",
                 "Mantém a linha entre a árvore de pastas e o painel de conteúdo.", _config.ShowLine);
             _totalToggle = new ToggleRow("Transparência total",
-                "Alfa 0 no fundo da janela: sem tinta e sem cor por cima do papel de parede.", _config.TotalTransparency);
+                _nativeTransparencySupported
+                    ? "Alfa 0 no fundo da janela: sem tinta e sem cor por cima do papel de parede."
+                    : "Indisponível no Windows 10: o reaplicador nativo deixa o Explorador branco/preto.",
+                _nativeTransparencySupported && _config.TotalTransparency);
+            _totalToggle.IsEnabled = _nativeTransparencySupported;
+            _totalToggle.ToolTip = _nativeTransparencySupported
+                ? "Mantém o vidro visível enquanto a app está aberta."
+                : "Disponível apenas no Windows 11. No Windows 10 use o cartão Vidro totalmente transparente e Aplicar no Explorer.";
             _addrToggle.Changed += delegate(bool value) { _config.ClearAddress = value; MarkDirty(); };
             _barToggle.Changed += delegate(bool value) { _config.ClearBarBg = value; MarkDirty(); };
             _winuiToggle.Changed += delegate(bool value) { _config.ClearWinUIBg = value; MarkDirty(); };
             _lineToggle.Changed += delegate(bool value) { _config.ShowLine = value; MarkDirty(); };
             _totalToggle.Changed += delegate(bool value)
             {
+                if (!_nativeTransparencySupported) return;
                 _config.TotalTransparency = value;
                 ExplorerTransparency.SetEnabled(value, _config.TotalTransparencyLevel);
                 MarkDirty();
@@ -328,24 +338,30 @@ namespace BahamaStudio
             title.FontSize = 13;
             title.FontWeight = FontWeights.SemiBold;
             titles.Children.Add(title);
-            TextBlock subtitle = Ui.Caption("Efeito nativo • janelas CabinetWClass");
+            TextBlock subtitle = Ui.Caption(_nativeTransparencySupported
+                ? "Efeito nativo • janelas CabinetWClass"
+                : "Não suportado no Windows 10");
             subtitle.FontSize = 10.5;
             subtitle.Margin = new Thickness(0, 2, 0, 0);
             titles.Children.Add(subtitle);
             Grid.SetColumn(titles, 1);
             header.Children.Add(titles);
 
-            Border chip = Ui.Chip("WIN32", Theme.GetBrush("BrushAccent"), Theme.GetColor("ColorAccent"));
+            Border chip = Ui.Chip(_nativeTransparencySupported ? "WIN32" : "WIN 10",
+                Theme.GetBrush("BrushAccent"), Theme.GetColor("ColorAccent"));
             chip.VerticalAlignment = VerticalAlignment.Center;
             Grid.SetColumn(chip, 2);
             header.Children.Add(chip);
 
             content.Children.Add(header);
 
-            TextBlock description = Ui.Caption(
-                "Zera a cor de fundo das janelas do Explorador com SetWindowCompositionAttribute " +
-                "e DwmExtendFrameIntoClientArea. O efeito é reaplicado ao ativar, restaurar, minimizar " +
-                "e ao trocar de foco, inclusive em janelas abertas depois.");
+            TextBlock description = Ui.Caption(_nativeTransparencySupported
+                ? "Zera a cor de fundo das janelas do Explorador com SetWindowCompositionAttribute " +
+                  "e DwmExtendFrameIntoClientArea. O efeito é reaplicado ao ativar, restaurar, minimizar " +
+                  "e ao trocar de foco, inclusive em janelas abertas depois."
+                : "Este efeito usa SetWindowCompositionAttribute e margens -1 no DWM. No Windows 10 " +
+                  "isso pinta o cliente de branco/preto e o vidro só reaparece ao minimizar e restaurar. " +
+                  "Por isso o reaplicador fica desativado neste sistema.");
             description.FontSize = 11;
             description.Margin = new Thickness(0, 11, 0, 0);
             content.Children.Add(description);
@@ -379,15 +395,19 @@ namespace BahamaStudio
             levelBlock.Children.Add(levelCaption);
 
             _totalLevel.Margin = new Thickness(0, 8, 0, 2);
+            _totalLevel.IsEnabled = _nativeTransparencySupported;
             System.Windows.Automation.AutomationProperties.SetName(_totalLevel, "Nível de transparência total");
             levelBlock.Children.Add(_totalLevel);
             content.Children.Add(levelBlock);
 
-            TextBlock note = Ui.Caption(
-                "Este interruptor mantém o vidro visível enquanto a app está aberta, inclusive " +
-                "minimizada no arranque. A configuração da engine continua gravada no config.ini, " +
-                "por isso o efeito também persiste depois de fechar. Use o cartão Vidro totalmente " +
-                "transparente para aplicar Acrílico RGBA(0,0,0,0) como base persistente.");
+            TextBlock note = Ui.Caption(_nativeTransparencySupported
+                ? "Este interruptor mantém o vidro visível enquanto a app está aberta, inclusive " +
+                  "minimizada no arranque. A configuração da engine continua gravada no config.ini, " +
+                  "por isso o efeito também persiste depois de fechar. Use o cartão Vidro totalmente " +
+                  "transparente para aplicar Acrílico RGBA(0,0,0,0) como base persistente."
+                : "No Windows 10 a alternativa estável é o cartão Vidro totalmente transparente: " +
+                  "ele grava Acrílico RGBA(0,0,0,0) na engine e aplica o efeito dentro do Explorer " +
+                  "sem depender do reaplicador nativo.");
             note.FontSize = 10.5;
             note.Margin = new Thickness(0, 11, 0, 0);
             note.Foreground = Theme.GetBrush("BrushWarning");
@@ -403,14 +423,17 @@ namespace BahamaStudio
             _config.Light = new Rgba(0, 0, 0, 0);
             _config.Dark = new Rgba(0, 0, 0, 0);
             // Reaplicador: no Windows 11 24H2 o Explorer repinta o fundo, por isso o
-            // "Fundo do Explorador" precisa ficar ligado para o vidro ser visível sempre.
-            _config.TotalTransparency = true;
-            _config.TotalTransparencyLevel = 100;
+            // "Fundo do Explorador" precisa ficar ligado. No Windows 10 ele é desativado
+            // porque produz cliente branco/preto; a base acrílica basta para o efeito.
+            _config.TotalTransparency = _nativeTransparencySupported;
+            if (_nativeTransparencySupported) _config.TotalTransparencyLevel = 100;
             _sync = true;
             SyncAll();
             _sync = false;
             MarkDirty();
-            if (Host != null) Host.Toast("Vidro transparente ativo. Use Aplicar para gravar e reaplicar no Explorador.", "info");
+            if (Host != null) Host.Toast(_nativeTransparencySupported
+                ? "Vidro transparente ativo. Use Aplicar para gravar e reaplicar no Explorador."
+                : "Vidro transparente ativo. Use Aplicar para gravar o acrílico no Explorador.", "info");
         }
 
         private FrameworkElement BuildColorCard()
@@ -1160,12 +1183,13 @@ namespace BahamaStudio
             _barToggle.SetSilent(_config.ClearBarBg);
             _winuiToggle.SetSilent(_config.ClearWinUIBg);
             _lineToggle.SetSilent(_config.ShowLine);
-            _totalToggle.SetSilent(_config.TotalTransparency);
+            _totalToggle.SetSilent(_nativeTransparencySupported && _config.TotalTransparency);
 
             SyncColorUi();
             _preview.Update(_config, _previewDark);
             UpdateSummary();
-            ExplorerTransparency.SetEnabled(_config.TotalTransparency, _config.TotalTransparencyLevel);
+            ExplorerTransparency.SetEnabled(_nativeTransparencySupported && _config.TotalTransparency,
+                _config.TotalTransparencyLevel);
         }
     }
 }
